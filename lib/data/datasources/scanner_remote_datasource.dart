@@ -1,16 +1,35 @@
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/bet_opportunity_model.dart';
 
 abstract class ScannerRemoteDataSource {
   Future<List<BetOpportunityModel>> fetchOpportunities();
+  Future<void> setApiKey(String key);
 }
 
 class ScannerRemoteDataSourceImpl implements ScannerRemoteDataSource {
-  final String _apiKey = "995f155b57a456dec029427821150f19";
+  final FlutterSecureStorage _storage;
   final String _baseUrl = "https://v3.football.api-sports.io";
   final double _bankrollCop = 10000.0;
+  static const _apiKeyStorageKey = 'api_football_key';
+
+  ScannerRemoteDataSourceImpl({FlutterSecureStorage? storage})
+      : _storage = storage ?? const FlutterSecureStorage();
+
+  @override
+  Future<void> setApiKey(String key) async {
+    await _storage.write(key: _apiKeyStorageKey, value: key);
+  }
+
+  Future<String> _getApiKey() async {
+    final key = await _storage.read(key: _apiKeyStorageKey);
+    if (key == null || key.isEmpty) {
+      throw Exception("API Key not configured. Please set it in settings.");
+    }
+    return key;
+  }
 
   Map<String, dynamic> _calculateBetSize(double bankroll, double decimalOdds, double winProbability) {
     double b = decimalOdds - 1.0;
@@ -73,9 +92,9 @@ class ScannerRemoteDataSourceImpl implements ScannerRemoteDataSource {
     return trueProbs;
   }
 
-  Future<Map<int, Map<String, String>>> _fetchFixtures(String date) async {
+  Future<Map<int, Map<String, String>>> _fetchFixtures(String date, String apiKey) async {
     final uri = Uri.parse("$_baseUrl/fixtures?date=$date");
-    final response = await http.get(uri, headers: {"x-apisports-key": _apiKey});
+    final response = await http.get(uri, headers: {"x-apisports-key": apiKey});
     if (response.statusCode != 200) throw Exception("Error fetching fixtures");
     
     final data = json.decode(response.body);
@@ -101,19 +120,20 @@ class ScannerRemoteDataSourceImpl implements ScannerRemoteDataSource {
   Future<List<BetOpportunityModel>> fetchOpportunities() async {
     List<BetOpportunityModel> resultsData = [];
     final date = DateTime.now().toIso8601String().split('T')[0];
+    final apiKey = await _getApiKey();
 
     try {
-      final fixturesMap = await _fetchFixtures(date);
+      final fixturesMap = await _fetchFixtures(date, apiKey);
       
       for (int page = 1; page <= 3; page++) {
         final uri = Uri.parse("$_baseUrl/odds?date=$date&page=$page");
-        final response = await http.get(uri, headers: {"x-apisports-key": _apiKey});
+        final response = await http.get(uri, headers: {"x-apisports-key": apiKey});
         
         if (response.statusCode != 200) continue;
         
         final data = json.decode(response.body);
         final responseList = data['response'] as List<dynamic>? ?? [];
-        if (responseList.isEmpty) break; // Si no hay más datos, terminar
+        if (responseList.isEmpty) break;
         
         for (var event in responseList) {
           final fixtureId = event['fixture']['id'] as int;

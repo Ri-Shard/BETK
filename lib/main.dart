@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'core/bindings/initial_binding.dart';
 import 'presentation/pages/dashboard_page.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  const storage = FlutterSecureStorage();
+  final existing = await storage.read(key: 'api_football_key');
+  if (existing == null) {
+    await storage.write(key: 'api_football_key', value: const String.fromEnvironment('API_KEY'));
+  }
   runApp(const BettingApp());
 }
 
