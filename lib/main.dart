@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/bindings/initial_binding.dart';
 import 'presentation/pages/dashboard_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
+  
   const storage = FlutterSecureStorage();
-  final existing = await storage.read(key: 'api_football_key');
-  if (existing == null) {
-    await storage.write(key: 'api_football_key', value: const String.fromEnvironment('API_KEY'));
+  final envKey = dotenv.env['API_KEY'] ?? '';
+  if (envKey.isNotEmpty && envKey != 'TU_CLAVE_AQUI') {
+    await storage.write(key: 'api_football_key', value: envKey);
   }
   runApp(const BettingApp());
 }
