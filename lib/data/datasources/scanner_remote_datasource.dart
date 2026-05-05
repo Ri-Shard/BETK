@@ -103,10 +103,8 @@ class ScannerRemoteDataSourceImpl implements ScannerRemoteDataSource {
     final date = DateTime.now().toIso8601String().split('T')[0];
 
     try {
-      // 1. Obtener nombres de equipos
       final fixturesMap = await _fetchFixtures(date);
       
-      // 2. Obtener Cuotas (limitar a 3 páginas para no consumir la API gratuita rápidamente)
       for (int page = 1; page <= 3; page++) {
         final uri = Uri.parse("$_baseUrl/odds?date=$date&page=$page");
         final response = await http.get(uri, headers: {"x-apisports-key": _apiKey});
@@ -128,7 +126,6 @@ class ScannerRemoteDataSourceImpl implements ScannerRemoteDataSource {
           
           final bookmakers = event['bookmakers'] as List<dynamic>? ?? [];
           
-          // Estructura: marketName -> pointStr -> bookieName -> { outcomeName: odd }
           Map<String, Map<String?, Map<String, Map<String, double>>>> marketData = {};
           
           for (var bookmaker in bookmakers) {
@@ -144,7 +141,6 @@ class ScannerRemoteDataSourceImpl implements ScannerRemoteDataSource {
                 final double price = double.tryParse(val['odd'].toString()) ?? 0.0;
                 if (price == 0.0) continue;
                 
-                // Extraer punto si existe (Ej: "Over 8.5" -> betOn: "Over", point: "8.5")
                 String betOn = rawValue;
                 String? pointStr;
                 
@@ -166,12 +162,10 @@ class ScannerRemoteDataSourceImpl implements ScannerRemoteDataSource {
           
           BetOpportunityModel? bestBetForEvent;
           
-          // Analizar cada mercado
           for (var marketName in marketData.keys) {
             for (var pointStr in marketData[marketName]!.keys) {
               final bookiesMap = marketData[marketName]![pointStr]!;
               
-              // 1. Encontrar la Casa "Sharp" (Pinnacle Benchmark)
               Map<String, double>? sharpOdds;
               if (bookiesMap.containsKey('Pinnacle')) {
                 sharpOdds = bookiesMap['Pinnacle'];
@@ -179,13 +173,11 @@ class ScannerRemoteDataSourceImpl implements ScannerRemoteDataSource {
                 sharpOdds = bookiesMap['Betfair'];
               }
               
-              if (sharpOdds == null) continue; // Si no hay Pinnacle/Betfair para este mercado, ignorar para evitar falsos positivos
+              if (sharpOdds == null) continue; 
               
-              // 2. Calcular Probabilidades Reales
               Map<String, double> trueProbs = _removeMarginPowerMethod(sharpOdds);
               if (trueProbs.isEmpty) continue;
               
-              // 3. Cruzar probabilidades reales contra todo el mercado
               for (var bookieName in bookiesMap.keys) {
                 final oddsMap = bookiesMap[bookieName]!;
                 
@@ -198,10 +190,6 @@ class ScannerRemoteDataSourceImpl implements ScannerRemoteDataSource {
                   
                   double ev = (trueProb * odd) - 1;
                   
-                  // Filtros de Realidad (Anti "Apuestas Soñadoras"):
-                  // 1. Probabilidad Real >= 35% (Equipos muy viables)
-                  // 2. Cuota máxima <= 3.0 (Para evitar Underdogs extremos)
-                  // 3. EV entre 2% y 20% (Si el EV es > 20%, suele ser un error/retraso temporal de la API de la casa de apuestas)
                   if (ev > 0.02 && ev < 0.20 && trueProb >= 0.35 && odd <= 3.0) {
                     if (bestBetForEvent == null || ev > (bestBetForEvent.ev / 100)) {
                       final nowStr = DateTime.now().toString(); 
@@ -234,7 +222,6 @@ class ScannerRemoteDataSourceImpl implements ScannerRemoteDataSource {
           }
         }
         
-        // Paginación
         final paging = data['paging'];
         if (paging != null && paging['current'] == paging['total']) {
           break;

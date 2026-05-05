@@ -13,7 +13,6 @@ class DashboardController extends GetxController {
   final RxString lastUpdate = "Nunca".obs;
 
   List<BetOpportunity> get top7Bets {
-    // Ordenar de Menor a Mayor Cuota (Los resultados más probables y seguros)
     final sortedBets = List<BetOpportunity>.from(bets)..sort((a, b) => a.odd.compareTo(b.odd));
     return sortedBets.take(7).toList();
   }
